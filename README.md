@@ -1,4 +1,4 @@
-# Far Cry 3 for Nintendo Switch (unofficial port)
+# F-Cry3-NX
 
 Version v0.1.0-preview
 
@@ -23,8 +23,8 @@ Captured on a Switch on builds from 12 to 21 November 2026, before this preview:
 
 ## Download and install
 
-Release destination: the private repository [plv890/fc3-switch-release](https://github.com/plv890/fc3-switch-release/releases).
-The package is named `fc3-switch-v0.1.0-preview.zip`; access requires permission to that repository.
+Download from [F-Cry3-NX Releases](https://github.com/plv890/F-Cry3-NX/releases).
+The package is named `fc3-switch-v0.1.0-preview.zip`; its filename and SD paths retain the FC3 compatibility identifier.
 
 The archive contains:
 

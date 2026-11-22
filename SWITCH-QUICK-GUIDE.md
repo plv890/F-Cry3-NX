@@ -1,4 +1,4 @@
-# Far Cry 3 on Nintendo Switch — quick guide
+# F-Cry3-NX — Far Cry 3 on Nintendo Switch quick guide
 
 ## Before you start
 

@@ -24,8 +24,8 @@ or generated `patch.dat`/`patch.fat`, including files made with the optional ico
 
 ## 1. Extract the release archive
 
-Use `fc3-switch-v0.1.0-preview.zip` from the private
-[plv890/fc3-switch-release Releases](https://github.com/plv890/fc3-switch-release/releases) page, which requires repository access.
+Use `fc3-switch-v0.1.0-preview.zip` from the
+[F-Cry3-NX Releases](https://github.com/plv890/F-Cry3-NX/releases) page.
 Extract it on your PC. Its archive-root contents are:
 
 ```text

@@ -1,3 +1,4 @@
-Use prepare_update.py on your PC to extract patch.dat and patch.fat from your own Title Update 5.
-Copy both extracted files here. Do not apply default.xexp.
+On your PC, put default.xex and tu00000004_00000000 beside prepare_update.py.
+Run python prepare_update.py without paths. It writes patch.dat and patch.fat into update/ beside the script.
+Copy both output files here, not into game_root/. Do not apply default.xexp.
 The update must have Media ID 003B8D49. See INSTALL.md at the repository root.

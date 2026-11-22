@@ -50,8 +50,10 @@ Game disc files, title update payloads, saves and a HOME forwarder are not bundl
 3. Extract your own Xbox 360 ISO with an Xbox 360-compatible extraction tool, then **copy the extracted tree's contents**
    into `game_root/`, with `default.xex` directly inside it. Copying the `.iso`, or only unpacking an outer ZIP to get
    an ISO, does not work. Keep `.dat`/`.fat` archives intact; do not unpack them. `$SystemUpdate` is unnecessary.
-4. Use the archive-root `prepare_update.py` on your PC with your own Title Update 5, then copy its `patch.dat` and
-   `patch.fat` into `update/`. Do not redistribute these generated files.
+4. Put your extracted `default.xex` and Title Update 5 file `tu00000004_00000000` beside the archive-root
+   `prepare_update.py` on your PC, then run `python prepare_update.py` without path arguments. It creates an `update/`
+   folder beside itself. Copy its `patch.dat` and `patch.fat` into `switch/fc3-nx/update/` on the SD, not into `game_root/`.
+   Do not redistribute these generated files.
 5. Launch hbmenu in application mode (commonly by holding **R** while launching a game), then select Far Cry 3.
    Do not use Album/applet mode.
 

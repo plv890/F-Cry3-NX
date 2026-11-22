@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
-"""Check your own Far Cry 3 (Xbox 360) default.xex and unpack patch.dat/patch.fat from your own Title Update 5.
-
-  python prepare_update.py <path to default.xex> <path to tu00000004_00000000> <output folder> [--icons]
-
---icons (optional) also adds button icons for the Switch layout (A/B and X/Y swapped, white). They are made from
-common.fat/common.dat next to your default.xex and merged into the unpacked patch files. Your originals are not changed.
-Archive format notes: Gibbed.Dunia2 (Zlib licence).
-
-Nothing is downloaded and no game data is included here. Standard library only."""
+"""Prepare your own Far Cry 3 (Xbox 360) Title Update 5 using local files only."""
+# Archive format notes: Gibbed.Dunia2 (Zlib licence).
+import argparse
 import hashlib, lzma, struct, sys
 from pathlib import Path
 
@@ -159,10 +153,28 @@ def add_icons(game, out):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != '--icons']
-    if len(args) != 3:
-        sys.exit(__doc__)
-    xex, tu, out = map(Path, args)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog='With no paths, read default.xex and tu00000004_00000000 beside this script '
+               'and write patch.dat/patch.fat into update/ beside this script. '
+               '--icons also needs common.fat and common.dat beside default.xex. '
+               'Original input files are not changed; existing output patch files are replaced.',
+    )
+    parser.add_argument('paths', nargs='*', metavar='PATH', help='optional: default.xex, title update, output folder')
+    parser.add_argument('--icons', action='store_true', help='add Switch-style icons from your own game files')
+    args = parser.parse_args()
+    if len(args.paths) not in (0, 3):
+        parser.error('provide all three paths, or no paths to use files beside this script')
+    if args.paths:
+        xex, tu, out = map(Path, args.paths)
+    else:
+        here = Path(__file__).resolve().parent
+        xex, tu, out = here / 'default.xex', here / 'tu00000004_00000000', here / 'update'
+    missing = [str(p) for p in (xex, tu) if not p.is_file()]
+    if args.icons:
+        missing.extend(str(p) for p in (xex.parent / 'common.fat', xex.parent / 'common.dat') if not p.is_file())
+    if missing:
+        parser.exit(1, 'Missing required files:\n' + '\n'.join(missing) + '\nPlace your extracted input files beside this script, or provide all three paths.\n')
     if sha(xex) != XEX:
         sys.exit(f'{xex}: this is not the supported default.xex (Media ID {MEDIA}, version 0.0.0.4)')
     print('default.xex OK')
@@ -176,8 +188,10 @@ def main():
             print(name, len(data), hashlib.sha256(data).hexdigest())
     if sorted(done) != ['patch.dat', 'patch.fat']:
         sys.exit('patch.dat/patch.fat not found in the update')
-    if '--icons' in sys.argv:
+    if args.icons:
         add_icons(xex.parent, out)
+    print(f'Ready: {out.resolve()}')
+    print('Copy patch.dat and patch.fat into sdmc:/switch/fc3-nx/update/.')
 
 
 if __name__ == '__main__':

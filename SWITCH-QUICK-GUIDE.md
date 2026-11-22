@@ -31,15 +31,21 @@ file tree's contents into `game_root/`. Merely unpacking an outer ZIP to obtain 
 Keep the `.dat` and `.fat` archives intact, preserving subfolders such as `worlds/`. Do not unpack those archives.
 `$SystemUpdate` is not needed.
 
-Run the helper on your PC from the extracted release root, using paths to your own files, for example:
+Put your extracted `default.xex` and Title Update 5 file `tu00000004_00000000` beside `prepare_update.py` on your PC.
+Run it without path arguments:
 
 ```text
-python "prepare_update.py" "my-game/default.xex" "my-tu/tu00000004_00000000" "prepared-update"
+python prepare_update.py
 ```
 
-Copy the resulting `patch.dat` and `patch.fat` into the SD's `update/` folder. Do not apply `default.xexp`.
-Optionally append `--icons` to generate Switch-style prompts from your own `common.dat`/`common.fat` beside
-`default.xex`. Your originals remain unchanged. Generated patch files are for your own local use, not distribution.
+It finds the inputs beside itself, not in the terminal's working directory, and writes `update/patch.dat` and
+`update/patch.fat` beside itself. Missing inputs are listed clearly. Copy the output pair into
+`sdmc:/switch/fc3-nx/update/`, not inside `game_root/`. Existing output patch files are replaced on each run.
+Do not apply `default.xexp`.
+
+For optional Switch-style prompts, also put your own `common.dat` and `common.fat` beside `default.xex`, then run
+`python prepare_update.py --icons`. Explicit input/output paths remain available; see [INSTALL.md](INSTALL.md).
+Your original inputs remain unchanged. Generated patch files are for your own local use, not distribution.
 
 ## Launch and controls
 

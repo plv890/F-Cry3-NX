@@ -68,26 +68,45 @@ and `.fat` files and `worlds/` tree. **Leave `.dat`/`.fat` archives intact; do n
 
 ## 3. Prepare your own Title Update 5 on the PC
 
-Install Python 3. Open a terminal in the extracted release folder, where `prepare_update.py` is located.
-For example, if your extracted disc is in `my-game/` and your update package is in `my-tu/`, run:
+Install Python 3. Put these three files together in a folder on your PC:
+
+```text
+prepare_update.py
+default.xex                your supported, extracted game executable
+tu00000004_00000000        your extracted Title Update 5 package, not its ZIP
+```
+
+Run the script **without any path arguments**:
+
+```text
+python prepare_update.py
+```
+
+The script automatically reads the two input files **beside the script itself**, even when started from a different
+working directory. It writes `update/patch.dat` and `update/patch.fat` beside the script and prints the output location.
+If a required file is missing, it lists the missing paths instead of asking you to enter a command format.
+Existing files with these names in the output `update/` folder are replaced; your original game/update inputs are not changed.
+
+Copy both output files into `switch/fc3-nx/update/` on the SD card, **not inside `game_root/`**.
+The helper checks the supported XEX hash and update IDs; an unexpected TU hash is reported as a warning.
+It does not download game files. Do not apply the update's `default.xexp` to `default.xex`.
+
+Optional Switch-style button icons require your own `common.fat` and `common.dat` beside `default.xex`.
+With all inputs beside the script, run:
+
+```text
+python prepare_update.py --icons
+```
+
+If you prefer to keep your inputs elsewhere, explicit paths remain supported:
 
 ```text
 python "prepare_update.py" "my-game/default.xex" "my-tu/tu00000004_00000000" "prepared-update"
 ```
 
-Replace the quoted relative paths with your own. The script checks the supported XEX and TU hashes and extracts
-`patch.dat` and `patch.fat`; it does not download game files. Copy both files from `prepared-update/` into
-`switch/fc3-nx/update/` on the SD card. The update's `default.xexp` is not used; do not apply it to `default.xex`.
-
-Optional Switch-style button icons can be generated from **your own** `common.fat` and `common.dat`, which must be
-beside your extracted `default.xex`. Add `--icons`:
-
-```text
-python "prepare_update.py" "my-game/default.xex" "my-tu/tu00000004_00000000" "prepared-update" --icons
-```
-
-This merges converted icons into the output patch pair without changing your original game files. It changes button
-prompts, not the physical control mapping. Keep the generated patch pair for your own local use; do not distribute it.
+Add `--icons` to that command if needed; `common.fat` and `common.dat` must be beside the selected `default.xex`.
+Converted icons change button prompts, not the physical mapping. Keep the generated patch pair for your own local use;
+do not distribute it.
 
 ## 4. Check the final SD layout and launch
 

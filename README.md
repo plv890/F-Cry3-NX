@@ -18,7 +18,8 @@ Captured on a Switch on builds from 12 to 21 November 2026, older than 1.0: the 
 |---|---|
 | ![Radio tower](media/01-radio-tower.jpg) | ![Jungle path](media/06-jungle-path.jpg) |
 | ![Village cutscene](media/07-cutscene-village.jpg) | ![Cutscene](media/08-cutscene-dennis.jpg) |
-| ![Shop](media/05-shop.jpg) | ![Candle scene](media/04-candle-tattoo.jpg) |
+
+![Candle scene](media/04-candle-tattoo.jpg)
 
 ## Download and install
 

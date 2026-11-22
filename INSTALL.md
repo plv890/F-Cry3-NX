@@ -1,7 +1,7 @@
-# Installation — v0.1.0-preview
+# Installation — v1.0.0
 
 Owner reports the release setup has been tested on their console; no independent clean-install validation across other hardware.
-This is a preview, not a stable release or a verified full playthrough. Performance is not guaranteed at 30 FPS.
+A full playthrough has not been independently verified. Performance is not guaranteed at 30 FPS.
 
 ## Supported game and required update
 
@@ -24,7 +24,7 @@ or generated `patch.dat`/`patch.fat`, including files made with the optional ico
 
 ## 1. Extract the release archive
 
-Use `fc3-switch-v0.1.0-preview.zip` from the
+Use `F-Cry3-NX-v1.0.0.zip` from the
 [F-Cry3-NX Releases](https://github.com/plv890/F-Cry3-NX/releases) page.
 Extract it on your PC. Its archive-root contents are:
 

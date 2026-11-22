@@ -14,7 +14,7 @@ own licenses and per-file exceptions. These notices do not relicense any code.
 ## Source snapshot and release limitations
 
 The existing source snapshot is **not the exact source tree used to build the
-packaged preview binary**. Historical patches and dependency-fetch scripts are
+packaged release binary**. Historical patches and dependency-fetch scripts are
 useful provenance, but are not a complete record of all changes or proof that
 the binary can be rebuilt or relinked from this snapshot. No exact-rebuild or
 complete corresponding-source claim is made here.
@@ -46,14 +46,14 @@ source or redistribution-compliance claim.
 | Scripts and toolchain integration by StevensND | Inherited `find_gaps.py`, `read_before_write.py`, `direct_calls.py`, `fetch_thirdparty.py` and Switch toolchain work | GPL-3.0 |
 | [nx-mod/rexglue-sdk-nx](https://github.com/nx-mod/rexglue-sdk-nx) and ds1-nx contributors | deko3d backend and game-layer integration identified in the local FC3 build files | SDK and application portions retain their respective notices; do not conflate them with deko3d's own license |
 | [XenosRecomp](https://github.com/hedge-dev/XenosRecomp) by hedge-dev and contributors | Xenos shader translator, with inherited nfsmw-nx, masseffect-nx and local changes | MIT; `XenosRecomp-MIT.txt`, copied from `shaders/LICENSE.md` |
-| [mesa-switch](https://github.com/danfromtico/mesa-switch) by danfromtico, with NaGaa95's updates, on top of [Mesa](https://mesa3d.org) | Inherited NVK/NAK graphics integration; the local deko3d build configuration still retains an NVK/Vulkan link | Mesa's per-file licenses, predominantly MIT; not a claim that this preview uses an unmodified upstream driver |
+| [mesa-switch](https://github.com/danfromtico/mesa-switch) by danfromtico, with NaGaa95's updates, on top of [Mesa](https://mesa3d.org) | Inherited NVK/NAK graphics integration; the local deko3d build configuration still retains an NVK/Vulkan link | Mesa's per-file licenses, predominantly MIT; not a claim that this release uses an unmodified upstream driver |
 
 ## Runtime and graphics dependencies
 
 Filenames in this table are relative to the release archive's `licenses/`
 directory, not a promise that the source snapshot vendors every dependency.
 The tables describe known dependencies and retained build paths; they are not
-an exact linked-object inventory of the preview NRO.
+an exact linked-object inventory of the release NRO.
 
 | Component | Use / authors | License text supplied |
 |---|---|---|
@@ -113,7 +113,7 @@ an exact linked-object inventory of the preview NRO.
 
 The historical `patches/` material records SDK, FFmpeg and XenosRecomp changes
 against older bases. It must not be read as an exhaustive delta for this
-preview binary. The inherited fetch script refers to the ReXGlue v0.10.0 base
+release binary. The inherited fetch script refers to the ReXGlue v0.10.0 base
 `c94f5ebdcb3c9d1a460ca48e04f9758448f8d518`; that does not pin every current
 local dependency or subsequent modification.
 

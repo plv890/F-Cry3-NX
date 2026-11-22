@@ -2,9 +2,9 @@
 
 ## Before you start
 
-This guide is for **v0.1.0-preview** (`fc3-switch-v0.1.0-preview.zip`).
+This guide is for **v1.0.0** (`F-Cry3-NX-v1.0.0.zip`).
 Owner reports the release setup has been tested on their console; no independent clean-install validation across other hardware.
-This is not a stable release, a verified full playthrough or a guarantee of 30 FPS.
+A full playthrough has not been independently verified; 30 FPS is not guaranteed.
 
 Follow [INSTALL.md](INSTALL.md) for the supported game hashes and complete installation steps. You need your own
 Xbox 360 game (Media ID `003B8D49`, `default.xex` version `0.0.0.4`) and matching Title Update 5.
@@ -81,7 +81,7 @@ Your original inputs remain unchanged. Generated patch files are for your own lo
   The release settings otherwise match the installed values.
 - **No music:** enable it in the game's **main menu** options before loading a game. The music option is unavailable
   once a game is loaded.
-- **Visual glitches or low frame rate:** lighting and texture issues remain in this preview. Measurements were made
+- **Visual glitches or low frame rate:** lighting and texture issues remain in this release. Measurements were made
   on one overclocked console, not across stock-clock hardware. This guide does not recommend changing clocks.
 - **Replacing an older version:** close the game, back up your installation and saves, and keep the release's
   `fc3.nro`, `fc3dk_shaders.dslib` and `fc3.toml` together. Do not mix files from different builds.

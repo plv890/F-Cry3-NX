@@ -1,6 +1,6 @@
 # F-Cry3-NX
 
-Version v0.1.0-preview
+Version v1.0.0
 
 An unofficial, non-commercial port of the Xbox 360 version of Far Cry 3 to the Nintendo Switch, made by static
 recompilation with [ReXGlue](https://github.com/rexglue/rexglue-sdk) and drawn with a deko3d renderer. It is not an emulator.
@@ -10,7 +10,7 @@ Not affiliated with or endorsed by Ubisoft or Nintendo. Far Cry is a trademark o
 
 ## Screenshots
 
-Captured on a Switch on builds from 12 to 21 November 2026, before this preview: the picture may differ. The overlay is Status Monitor.
+Captured on a Switch on builds from 12 to 21 November 2026: the picture may differ. The overlay is Status Monitor.
 
 ![Beach](media/02-beach-ocean.jpg)
 
@@ -24,7 +24,7 @@ Captured on a Switch on builds from 12 to 21 November 2026, before this preview:
 ## Download and install
 
 Download from [F-Cry3-NX Releases](https://github.com/plv890/F-Cry3-NX/releases).
-The package is named `fc3-switch-v0.1.0-preview.zip`; its filename and SD paths retain the FC3 compatibility identifier.
+The package is named `F-Cry3-NX-v1.0.0.zip`. Keep the documented `switch/fc3-nx/` SD paths unchanged.
 
 The archive contains:
 
@@ -74,12 +74,12 @@ Only one edition is supported. The game and the title update must have the same 
 
 Title Update 5 for Media ID `6F6EAD36` belongs to another edition and does not fit. Other editions: not verified.
 
-## Preview status
+## Status and known limitations
 
 Owner reports the release setup has been tested on their console; no independent clean-install validation across other hardware.
 
 - Booting, loading saves, open-world gameplay and cutscenes have been reported on one console.
-- This is a preview, not a stable release or a verified full playthrough. There is no guaranteed 30 FPS.
+- A full playthrough has not been independently verified. There is no guaranteed 30 FPS.
 - Measurements on one overclocked console were around 25 FPS with drops below 20; they do not establish stock-clock
   performance. Other console models and firmwares have not been independently validated.
 - Known bugs include lighting and texture glitches in some scenes.

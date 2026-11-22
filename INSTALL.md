@@ -57,38 +57,104 @@ Allow about 6 GB in total for the port and your game files. Back up an existing 
 
 ## 2. Extract your ISO, then copy the extracted files
 
-Use an **Xbox 360-compatible ISO extraction tool** on your own disc image. If your backup is inside a ZIP or similar
-archive, extracting that outer archive only gives you the ISO: you must still extract the Xbox 360 filesystem from it.
-**Copying the `.iso` file onto the SD card does not work.**
+If you already have the extracted disc files, skip the extraction commands and check the folder layout below.
+Otherwise, use your own Xbox 360 disc image. **Copying the `.iso` file onto the SD card does not work.**
 
-Copy the **contents of the extracted disc tree**, preserving subfolders, into `switch/fc3-nx/game_root/`.
-`default.xex` must be directly inside `game_root/`, not inside another enclosing folder. Include the game's `.dat`
-and `.fat` files and `worlds/` tree. **Leave `.dat`/`.fat` archives intact; do not unpack those archives.**
+### First: unpack an outer archive, if present
+
+If your backup is inside a ZIP or 7z archive, an open-source archive tool such as **7-Zip** can unpack that outer
+archive on your PC. Obtaining an `.iso` is only the first step: you must still extract its Xbox 360 game filesystem.
+Mounting the ISO in Windows or seeing only a video/DVD partition is not enough.
+
+### Then: extract the Xbox 360 ISO with one of these open-source tools
+
+Choose **one** option below; you do not need to run both. These tools support the known Xbox 360 XGD2/XGD3 partition
+offsets as well as partition-only XISO images. That does not guarantee that every dump is valid or supported.
+Use the named upstream project, not an unrelated similarly named converter. The tools are not included in this release.
+
+The examples use **Windows PowerShell**. Put the chosen executable and your ISO in a working folder, open that folder
+in File Explorer, type `powershell` in the address bar and press Enter. Replace `Far Cry 3.iso` with your ISO's actual
+filename, keeping the quotes. Choose a new, empty output folder.
+
+**Option A — extract-xiso, maintained by XboxDev (open-source, BSD-style license):**
+
+```powershell
+.\extract-xiso.exe -x "Far Cry 3.iso" -d "FC3-extracted"
+```
+
+**Option B — xdvdfs-cli, by antangelo (open-source, MIT license; executable named xdvdfs):**
+
+```powershell
+.\xdvdfs.exe unpack "Far Cry 3.iso" "FC3-extracted"
+```
+
+If the downloaded executable has a different name, use that name in the command. To check your version's options,
+run `.\extract-xiso.exe -h` or `.\xdvdfs.exe unpack -h`. On Linux/macOS, use the corresponding executable without
+`.exe` (for example, `./xdvdfs unpack "Far Cry 3.iso" "FC3-extracted"`). Use extraction/unpack mode, not image creation
+or rewriting. These examples were checked against upstream documentation and source; no new extraction of an actual
+Far Cry 3 image was performed for this guide update.
+
+### Check the extracted tree and copy its contents
+
+The result should contain `default.xex`, `common.dat`, `common.fat`, the other disc files and the `worlds/` tree.
+If these are missing, do not copy an incomplete result or rename another file to `default.xex`; check the extraction
+result and image format first. The helper in the next step checks whether the extracted executable is the supported one.
+
+Copy the **contents of `FC3-extracted/`**, preserving subfolders, into `switch/fc3-nx/game_root/` on the SD card.
+The correct path is `switch/fc3-nx/game_root/default.xex`, **not**
+`switch/fc3-nx/game_root/FC3-extracted/default.xex`. **Leave `.dat`/`.fat` archives intact; do not unpack those archives.**
 `$SystemUpdate` is unnecessary and can be omitted.
 
 ## 3. Prepare your own Title Update 5 on the PC
 
-Install Python 3. Put these three files together in a folder on your PC:
+1. Install **Python 3** on your PC. The helper uses only Python's standard library; no `pip` packages are needed.
+2. Make a PC folder for preparation and put the following three files directly inside it. Copy `default.xex` from
+   your extracted disc tree; keep the original in the tree you copy to the SD card. If your own title update is inside
+   a ZIP/7z, unpack that outer archive first. The input here is the actual package `tu00000004_00000000`, not the ZIP
+   or an already extracted `patch.dat`.
 
 ```text
-prepare_update.py
-default.xex                your supported, extracted game executable
-tu00000004_00000000        your extracted Title Update 5 package, not its ZIP
+FC3-preparation/
+  prepare_update.py
+  default.xex
+  tu00000004_00000000
 ```
 
-Run the script **without any path arguments**:
+3. Open `FC3-preparation` in File Explorer, type `powershell` in the address bar and press Enter. Run the script
+   **without any input/output path arguments**:
+
+```powershell
+python .\prepare_update.py
+```
+
+If Windows does not recognize `python` but the Python launcher is installed, use `py -3 .\prepare_update.py` instead.
+Use a terminal rather than double-clicking the script so that any error message stays visible.
+On Linux/macOS, open a terminal in the same folder and run `python3 prepare_update.py`.
+
+The script automatically reads the two input files **beside the script itself**, even when invoked by its full path
+from a different working directory. It writes `update/patch.dat` and `update/patch.fat` beside the script and prints
+`Ready:` followed by the output location:
 
 ```text
-python prepare_update.py
+FC3-preparation/
+  prepare_update.py
+  default.xex
+  tu00000004_00000000
+  update/
+    patch.dat
+    patch.fat
 ```
-
-The script automatically reads the two input files **beside the script itself**, even when started from a different
-working directory. It writes `update/patch.dat` and `update/patch.fat` beside the script and prints the output location.
 If a required file is missing, it lists the missing paths instead of asking you to enter a command format.
 Existing files with these names in the output `update/` folder are replaced; your original game/update inputs are not changed.
 
-Copy both output files into `switch/fc3-nx/update/` on the SD card, **not inside `game_root/`**.
+4. After successful completion, copy **both** output files into `switch/fc3-nx/update/` on the SD card,
+   **not inside `game_root/`**. Do not copy the whole `FC3-preparation` folder, the Python script or the original TU
+   package onto the SD card. The disc's `default.xex` belongs in `game_root/`, as shown in the final layout below.
+
 The helper checks the supported XEX hash and update IDs; an unexpected TU hash is reported as a warning.
+If it reports `Missing required files`, check the listed paths and actual filenames (enable file extensions in File
+Explorer). If it rejects the executable or update IDs, check your edition against the table above; do not bypass the
+checks. A TU hash warning means it differs from the tested package, even if its IDs allow extraction.
 It does not download game files. Do not apply the update's `default.xexp` to `default.xex`.
 
 Optional Switch-style button icons require your own `common.fat` and `common.dat` beside `default.xex`.

@@ -28,6 +28,22 @@ Create `game_root/` and `update/` if needed; their contents are not bundled.
 
 **An ISO is not a ready-to-copy game folder.** Extract it with an Xbox 360-compatible tool, then copy the extracted
 file tree's contents into `game_root/`. Merely unpacking an outer ZIP to obtain the ISO is not enough.
+Open-source options include **extract-xiso (XboxDev)** and **xdvdfs-cli (antangelo)**; choose one. Windows PowerShell
+examples, with the chosen executable and your ISO in the current folder:
+
+```powershell
+.\extract-xiso.exe -x "Far Cry 3.iso" -d "FC3-extracted"
+```
+
+Or, instead:
+
+```powershell
+.\xdvdfs.exe unpack "Far Cry 3.iso" "FC3-extracted"
+```
+
+Replace the example ISO filename with your own. Copy the **contents** of `FC3-extracted`, not that enclosing folder,
+so the executable ends up at `game_root/default.xex`. 7-Zip can unpack an outer ZIP/7z but is not a replacement for
+this Xbox 360 filesystem extraction step. See [INSTALL.md](INSTALL.md) for terminal setup and checks.
 Keep the `.dat` and `.fat` archives intact, preserving subfolders such as `worlds/`. Do not unpack those archives.
 `$SystemUpdate` is not needed.
 

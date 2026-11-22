@@ -49,7 +49,9 @@ Game disc files, title update payloads, saves and a HOME forwarder are not bundl
 2. Create `switch/fc3-nx/game_root/` and `switch/fc3-nx/update/` if needed.
 3. Extract your own Xbox 360 ISO with an Xbox 360-compatible extraction tool, then **copy the extracted tree's contents**
    into `game_root/`, with `default.xex` directly inside it. Copying the `.iso`, or only unpacking an outer ZIP to get
-   an ISO, does not work. Keep `.dat`/`.fat` archives intact; do not unpack them. `$SystemUpdate` is unnecessary.
+   an ISO, does not work. Open-source examples: **extract-xiso (XboxDev)** or **xdvdfs-cli (antangelo)**;
+   extraction commands and Windows terminal steps are in [INSTALL.md](INSTALL.md). 7-Zip is suitable for the outer
+   ZIP/7z archive, not a replacement for this step. Keep `.dat`/`.fat` archives intact; do not unpack them. `$SystemUpdate` is unnecessary.
 4. Put your extracted `default.xex` and Title Update 5 file `tu00000004_00000000` beside the archive-root
    `prepare_update.py` on your PC, then run `python prepare_update.py` without path arguments. It creates an `update/`
    folder beside itself. Copy its `patch.dat` and `patch.fat` into `switch/fc3-nx/update/` on the SD, not into `game_root/`.

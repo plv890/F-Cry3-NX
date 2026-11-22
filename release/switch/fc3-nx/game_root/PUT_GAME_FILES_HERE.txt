@@ -1,1 +1,3 @@
-Put your own game files here. See INSTALL.md.
+Extract your own Xbox 360 ISO, then copy the extracted game files and folders here.
+Do not copy the ISO itself. default.xex must be directly inside game_root/.
+Keep the game's .dat and .fat archives intact. See INSTALL.md at the repository root.

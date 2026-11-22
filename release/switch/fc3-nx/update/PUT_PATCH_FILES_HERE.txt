@@ -1,1 +1,3 @@
-Put patch.dat and patch.fat from your own Title Update 5 here. See INSTALL.md.
+Use prepare_update.py on your PC to extract patch.dat and patch.fat from your own Title Update 5.
+Copy both extracted files here. Do not apply default.xexp.
+The update must have Media ID 003B8D49. See INSTALL.md at the repository root.

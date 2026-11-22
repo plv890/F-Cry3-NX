@@ -6,8 +6,7 @@ An unofficial, non-commercial port of the Xbox 360 version of Far Cry 3 to the N
 recompilation with [ReXGlue](https://github.com/rexglue/rexglue-sdk) and drawn with a deko3d renderer. It is not an emulator.
 Not affiliated with or endorsed by Ubisoft or Nintendo. Far Cry is a trademark of Ubisoft.
 
-**This repository has no game files.** You need your own copy of the game and its title update. There are no prebuilt
-binaries here: the code generated from the game, the shaders made from it and the NRO are not part of this repository.
+**The game disc files and the title update are not included.** You need your own copy of the game and its title update.
 
 ## Screenshots
 
@@ -20,6 +19,27 @@ Captured on a Switch on builds from 12 to 21 November 2026, older than 1.0: the 
 | ![Radio tower](media/01-radio-tower.jpg) | ![Jungle path](media/06-jungle-path.jpg) |
 | ![Village cutscene](media/07-cutscene-village.jpg) | ![Cutscene](media/08-cutscene-dennis.jpg) |
 | ![Shop](media/05-shop.jpg) | ![Candle scene](media/04-candle-tattoo.jpg) |
+
+## Download and install
+
+Get the archive from **Releases**. It is laid out for the SD card:
+
+```
+switch/fc3-nx/
+  fc3.nro                the port
+  fc3dk_shaders.dslib    shader library
+  fc3.toml               settings
+  game_root/             your own game files go here
+  update/                your own patch.dat and patch.fat go here
+pc/prepare_update.py     unpacks your own title update on a PC
+```
+
+1. Copy `switch` to the root of the SD card.
+2. Copy the files of your own disc into `switch/fc3-nx/game_root/`.
+3. Unpack your own Title Update 5 with `prepare_update.py` and copy the two files into `switch/fc3-nx/update/`.
+4. Start it in application mode, not from the Album.
+
+Full guide with hashes: [INSTALL.md](INSTALL.md).
 
 ## Supported game
 
@@ -34,8 +54,6 @@ Only one edition is supported. The game and the title update must have the same 
 
 Title Update 5 for Media ID `6F6EAD36` belongs to another edition and does not fit. Other editions: not verified.
 
-See [INSTALL.md](INSTALL.md) for hashes and steps.
-
 ## State of 1.0
 
 - Boots from the HOME menu, loads saves, open world and cutscenes run.
@@ -46,6 +64,7 @@ See [INSTALL.md](INSTALL.md) for hashes and steps.
   RAM 3000 MHz in the Horizon OC profile. CPU 2.3 GHz: not verified. Overclocking is at your own risk.
 - Stock clocks, other console models and firmwares: not verified.
 - Installation on a clean SD card: not verified.
+- The source in this repository is close to the released build but not identical to it.
 
 ## Contents
 
@@ -55,8 +74,8 @@ See [INSTALL.md](INSTALL.md) for hashes and steps.
 | `sdk/` | modified ReXGlue SDK with the Switch layer and the deko3d renderer |
 | `shaders/` | shader translation tools |
 | `patches/`, `mesa/` | changes to third-party code |
-| `tools/` | build tools and `prepare_update.py` |
-| `fc3.toml.example` | example settings |
+| `tools/` | build tools |
+| `release/` | the SD card layout of the release |
 
 ## License and credits
 

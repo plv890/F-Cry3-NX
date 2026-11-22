@@ -1,0 +1,1 @@
+Put your own game files here. See INSTALL.md.

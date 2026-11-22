@@ -1,0 +1,1 @@
+Put patch.dat and patch.fat from your own Title Update 5 here. See INSTALL.md.

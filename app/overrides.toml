@@ -1,0 +1,562 @@
+# Far Cry 3 (Xbox 360) - analysis corrections for the code generator.
+#
+# Empty on purpose. Every entry below belongs to Far Cry 3 alone and needs its evidence (which tool or which log
+# found it), so nothing may be copied from another game's manifest.
+#
+# The tools that produce candidates:
+#   tools/find_gaps.py, tools/gap_fixpoint.py   code the automatic discovery left without a function
+#   tools/pointer_scan.py                       code pointers stored in data (vtables, callback tables)
+#   tools/pointer_audit.py, tools/pointer_fixpoint.py   pointers reached only through a pointer
+#   tools/switch_check.py                       truncated jump tables (`switch` statements)
+#   tools/runtime_gap_resolver.py               "Call to invalid or unregistered function" from a game log
+#
+# Root keys that will be needed here (address and evidence, once the game has booted once):
+#   setjmp_address / longjmp_address    the CRT's setjmp and longjmp; without them r1/r31 come back corrupted
+#                                       after a call that returns through longjmp
+#
+# setjmp/longjmp, confirmed 2026-10-13 by shape (saver vs mirrored restore) in
+# out/default_image.bin, independent of any other game (sa2-notes.md documents the same
+# class with the same crash signature: r1/r31 corrupted after a call returns):
+#   setjmp 0x83615650: stub (lis/lwz/cmpwi/mtctr/bnectr) falling through to the saver at
+#     0x83615664 (mflr r0, mfcr, stfd f14-f31 at 0x8361566C-0x836156B0, std r13-r31 at
+#     0x836156B4-0x836156FC, stvx VMX block to 0x836158FC, stw r0/std r1/li r3,0/blr at
+#     0x83615900-0x83615918). 9 call sites in app/generated/default (e.g.
+#     fc3_recomp.130.cpp:25796). Registered address is the function start 0x83615650.
+#   longjmp 0x83615920 (generated as sub_83615920): mirrored restore (lfd f14-f31 at
+#     0x8361595C-0x836159A0, ld r13-r31 at 0x836159A4-0x836159EC, VMX loads to
+#     0x83615BEC, mtlr/mtcrf/mr r3,r6/blr at 0x83615BF0-0x83615C08) via helper 0x836224D0.
+setjmp_address = 0x83615650
+longjmp_address = 0x83615920
+#
+# Known shapes to look for, from the guide (chapter 3.2):
+#   - functions reached only through pointers (CRT initializer tables, vtables, callbacks built with lis/addi)
+#   - truncated jump tables ("Switch case out of range" / illegal instruction)
+#   - gaps: code that exists in the XEX but no static path reaches
+#   - functions that never return (abort, C++ throw): without read_before_write the translator merges the catch
+#     funclet into its parent and falls through into foreign code
+
+[functions]
+# First validation run (rexglue codegen, 2026-10-09): a direct unconditional branch (`b`, a tail call) to each
+# address below, which automatic discovery had not assigned to any function ("target not in any function"). The
+# evidence is the generator's own Validate phase, out/codegen.log: "UnresolvedCall (20)". No sizes imposed: the
+# Discover phase determines each boundary from the PPC code.
+#
+# 20 errors over 17 distinct targets (0x82BF6358 is branched to twice, 0x82A029C0 three times).
+"0x823FAB70" = { }  # from 0x823FF5A8
+"0x824572B8" = { }  # from 0x82458D7C
+"0x82A029C0" = { }  # from 0x828F062C (x3)
+"0x82AC14E0" = { }  # from 0x832D3B5C
+"0x82BF6358" = { }  # from 0x82BF63E8, 0x82BF6408
+"0x82BF6CD8" = { }  # from 0x82AE1458
+"0x82E4CD30" = { }  # from 0x83044B8C
+"0x83772748" = { }  # from 0x83806BC4
+"0x8378FC88" = { }  # from 0x83772B38
+"0x837B37D8" = { }  # from 0x837727E8
+"0x837B3848" = { }  # from 0x837727B0
+"0x837B3858" = { }  # from 0x83772778. Only one left after the first pass added the 17 above (second run,
+                    # out/codegen.log: "UnresolvedCall (1)" after 1668 s): registering 0x837B3848 changed what
+                    # the branch scan reaches next to it, so this neighbour of the same table appeared.
+
+# A gap inside sub_83493B70: eighteen branches to 0x83494044 / 0x83494048 (its own code, fc3_recomp.326.cpp) whose
+# block the Discover phase cut. codegen.partition.json puts the address under sub_83493D58, which discovery never
+# made a function, so the generator wrote the gotos and not the labels:
+#   error: use of undeclared label 'loc_83494048'
+#
+# Declaring sub_83493D58 here did NOT work (tried: bare, with parent = 0x83493B70, with end = 0x83494068; each
+# codegen run leaves it out of the tree). The likely reason is phase_discover.cpp:175, which drops a branch whose
+# target falls inside the function's own PDATA region: the PDATA the Xbox has for sub_83493B70 extends past
+# 0x83494044, so the branch is discarded as "internal" and nothing ever reaches the function that owns that code.
+#
+# The two entries below are that test, not a known fix: giving sub_83493B70 an `end` before the branch target takes
+# the target out of the PDATA region, so the branch is no longer skipped and discovery can reach the code. If it
+# works, sub_83493D58 appears on its own and this second entry can go.
+#
+#   tools/fix_missing_labels.py must report "nothing missing" afterwards. If it still reports the two labels, this
+#   approach failed and the fix belongs in the SDK (docs/NOTAS-DE-BUILD.md, section 9).
+"0x83493B70" = { end = 0x83493D58 }
+"0x83493D58" = { end = 0x83494068 }
+
+# The first boot (out\pc\logs\fc3_001.log, 2026-10-09) got as far as mounting the game files, building the function
+# table (code 82340000-83DF2AF4) and creating the shader storage, then stopped:
+#   [FATAL] Unresolved call from 0x8362B300 to 0x8363CE50
+# The generator has reported this one since the first run ("Unresolved function 0x8363CE50 from 0x8362B300 (no
+# CallTarget in FunctionNode)") but its Validate phase did not count it as an error, so codegen completed anyway.
+# It is a direct branch (b) out of sub_8362B2C0's block into a gap; registering it here gives the code its own
+# function, which is what the branch needs.
+"0x8363CE50" = { }
+"0x837B3C08" = { }  # from 0x837C07F8
+"0x837C26C0" = { }  # from 0x837872D0
+"0x837DDC90" = { }  # from 0x837B3C20
+"0x837DDCA0" = { }  # from 0x837B3C30
+"0x837DDCF8" = { }  # from 0x837B3C04
+"0x83A268A0" = { }  # from 0x83A46038
+
+# Runtime auto-resolve candidate, accepted from an observed indirect-call failure.
+# Exact start the 40-byte gap 0x823ED028-0x823ED050; only this address is declared.
+"0x823ED028" = { }
+
+# Runtime auto-resolve candidate, accepted from an observed indirect-call failure.
+# Exact start the 16-byte gap 0x823E5050-0x823E5060; only this address is declared.
+"0x823E5050" = { }
+
+# Runtime auto-resolve candidate, accepted from an observed indirect-call failure.
+# Exact start the 8-byte gap 0x82B75D30-0x82B75D38; only this address is declared.
+"0x82B75D30" = { }
+
+# Code pointers into unclaimed gaps, stored in data (vtables, callback tables) or built in code (lis/addi:
+# callbacks passed at run time), accepted by tools/pointer_fixpoint.py pass 1: the scratch listing fits
+# in the gap (or continues only into a registered function it branches to: "then the registered tail"),
+# ends in a terminator and reads no register that is undefined at a function entry. The comment says
+# where the pointer is stored ("pointer at") or built ("built at", inside the code range).
+"0x8234BE10" = { }  # 3 instructions, pointer at 0x82003B68
+"0x8234C6D0" = { }  # 5 instructions, pointer at 0x82004644 (+1 more)
+"0x8234C6F8" = { }  # 5 instructions, pointer at 0x82004700 (+1 more)
+"0x823812C0" = { }  # 8 instructions, built at 0x82351764 (+1 more)
+"0x823812E0" = { }  # 7 instructions, built at 0x82351768
+"0x82381770" = { }  # 3 instructions, pointer at 0x82003B28 (+3 more)
+"0x82384190" = { }  # 7 instructions, pointer at 0x82003B98
+"0x823841F8" = { }  # 5 instructions, pointer at 0x82003BA8
+"0x82384EC8" = { }  # 2 instructions, pointer at 0x820039DC (+4 more)
+"0x82395AB8" = { }  # 8 instructions, pointer at 0x82005540
+"0x82395C40" = { }  # 8 instructions, pointer at 0x82005578
+"0x82396440" = { }  # 8 instructions, pointer at 0x820055B0
+"0x82396690" = { }  # 8 instructions, pointer at 0x820055E8
+"0x82396F48" = { }  # 8 instructions, pointer at 0x82005624
+"0x82397BD8" = { }  # 14 instructions, pointer at 0x820058EC
+"0x8239E130" = { }  # 8 instructions, pointer at 0x82005CE4
+"0x8239E5C8" = { }  # 8 instructions, pointer at 0x82005D44
+"0x823A03E0" = { }  # 8 instructions, pointer at 0x82005F38
+"0x823A0670" = { }  # 8 instructions, pointer at 0x82005F98
+"0x823A0690" = { }  # 8 instructions, pointer at 0x82005FB8
+"0x823B16D8" = { }  # 3 instructions, pointer at 0x82007B1C
+"0x823B4A60" = { }  # 8 instructions, pointer at 0x82007F24
+"0x823BDE18" = { }  # 8 instructions, pointer at 0x82008940
+"0x823BDE58" = { }  # 4 in the gap, then the registered tail sub_823BDE68, pointer at 0x82008950
+"0x823BDE78" = { }  # 4 in the gap, then the registered tail sub_823BDE88, pointer at 0x82008954
+"0x823BDE98" = { }  # 5 instructions, pointer at 0x82008958
+"0x823CF8E0" = { }  # 8 instructions, pointer at 0x82009200
+"0x823CFE08" = { }  # 8 instructions, pointer at 0x82009238
+"0x823EBE40" = { }  # 19 in the gap, then the registered tail sub_823EBE8C, pointer at 0x8200B750 (+1 more)
+"0x823F1858" = { }  # 14 in the gap, then the registered tail sub_823F1890, built at 0x823F3044
+"0x823F1A70" = { }  # 16 in the gap, then the registered tail sub_823F1AB0, built at 0x823F31DC
+"0x823F3088" = { }  # 14 in the gap, then the registered tail sub_823F30C0, built at 0x823F4734
+"0x823FD210" = { }  # 17 instructions, pointer at 0x8200C7DC
+"0x824103A8" = { }  # 1 instructions, pointer at 0x8200D7EC (+2 more)
+"0x82410688" = { }  # 4 instructions, pointer at 0x8200DDA4
+"0x82410698" = { }  # 18 instructions, pointer at 0x8200DDB4 (+8 more)
+"0x82419A20" = { }  # 4 instructions, pointer at 0x8200D824 (+3 more)
+"0x82419A30" = { }  # 4 instructions, pointer at 0x8200D840 (+4 more)
+"0x82419A50" = { }  # 4 instructions, pointer at 0x8200D83C (+4 more)
+"0x82419A60" = { }  # 4 instructions, pointer at 0x8200D81C (+3 more)
+"0x82419A70" = { }  # 4 instructions, pointer at 0x8200D838 (+4 more)
+"0x82419A80" = { }  # 4 instructions, pointer at 0x8200D818 (+3 more)
+"0x82419A90" = { }  # 4 instructions, pointer at 0x8200D834 (+4 more)
+"0x82419AA0" = { }  # 4 instructions, pointer at 0x8200D814 (+18 more)
+"0x82419AB0" = { }  # 4 instructions, pointer at 0x8200D830 (+4 more)
+"0x82419AC0" = { }  # 4 instructions, pointer at 0x8200D810 (+17 more)
+"0x82419AD0" = { }  # 4 instructions, pointer at 0x8200D82C (+4 more)
+"0x82419AE0" = { }  # 4 instructions, pointer at 0x8200D850 (+7 more)
+"0x82419AF0" = { }  # 4 instructions, pointer at 0x8200D85C (+4 more)
+"0x82419B10" = { }  # 4 instructions, pointer at 0x8200D858 (+4 more)
+"0x82419B30" = { }  # 4 instructions, pointer at 0x8200D854 (+4 more)
+"0x824B8600" = { }  # 18 instructions, pointer at 0x820182AC
+"0x824C6938" = { }  # 4 instructions, pointer at 0x820182E0
+"0x824DBF10" = { }  # 8 instructions, pointer at 0x8201F2CC
+"0x824DE110" = { }  # 9 instructions, pointer at 0x8201E6A8
+"0x824DF008" = { }  # 2 instructions, pointer at 0x8201CB7C
+"0x824DF038" = { }  # 2 instructions, pointer at 0x8201CF78
+"0x82566E00" = { }  # 4 instructions, pointer at 0x82025C04
+"0x82566E10" = { }  # 3 instructions, pointer at 0x82025C10
+"0x8256D6F0" = { }  # 4 instructions, pointer at 0x82025BFC
+"0x8256D700" = { }  # 18 instructions, pointer at 0x82025C00
+"0x825E94B0" = { }  # 18 instructions, pointer at 0x8202E68C
+"0x82647D40" = { }  # 8 instructions, pointer at 0x8203A238
+"0x82696AA8" = { }  # 6 instructions, built at 0x826B74FC (+1 more)
+"0x826CBE80" = { }  # 4 instructions, built at 0x826DB8A4
+"0x826CBE90" = { }  # 4 instructions, built at 0x8262B514 (+1 more)
+"0x8273BB60" = { }  # 4 instructions, pointer at 0x8200D828 (+5 more)
+"0x82766240" = { }  # 18 instructions, pointer at 0x82051B50
+"0x8277FC30" = { }  # 2 instructions, pointer at 0x82055DA8
+"0x82795D08" = { }  # 9 instructions, pointer at 0x82059944
+"0x8280F380" = { }  # 1 instructions, pointer at 0x82062ECC
+"0x82827C20" = { }  # 4 instructions, pointer at 0x82061734
+"0x828DFDC8" = { }  # 6 instructions, pointer at 0x82070314
+"0x828E2B98" = { }  # 6 in the gap, then the registered tail sub_828E2BB0, sub_828E2BB8, pointer at 0x8206E740
+"0x828F7818" = { }  # 3 instructions, pointer at 0x8206EFC4
+"0x828FC3C0" = { }  # 4 instructions, pointer at 0x8206EFFC
+"0x82922A60" = { }  # 4 instructions, pointer at 0x8206EFE4 (+1 more)
+"0x82936BE8" = { }  # 5 instructions, pointer at 0x8205D024
+"0x82936C40" = { }  # 7 instructions, pointer at 0x82008700 (+1 more)
+"0x8294ABB8" = { }  # 4 instructions, built at 0x8296021C
+"0x8294ABC8" = { }  # 4 instructions, built at 0x82961080
+"0x8294ABD8" = { }  # 4 instructions, built at 0x829606CC
+"0x8294ABE8" = { }  # 4 instructions, built at 0x8262B704 (+1 more)
+"0x8294ABF8" = { }  # 4 instructions, built at 0x82964CE0 (+2 more)
+"0x8294AC08" = { }  # 2 instructions, pointer at 0x82074CAC
+"0x8294AC20" = { }  # 4 instructions, built at 0x82966674
+"0x8294AC30" = { }  # 4 instructions, built at 0x82960360
+"0x8294AC40" = { }  # 4 instructions, built at 0x82960E0C
+"0x8294AC50" = { }  # 4 instructions, built at 0x82960EF8
+"0x8294AC60" = { }  # 4 instructions, built at 0x82960FB8
+"0x8294AC70" = { }  # 4 instructions, built at 0x82960C48
+"0x8294AC80" = { }  # 4 instructions, built at 0x82961044
+"0x8294AC90" = { }  # 4 instructions, built at 0x82960954
+"0x8294ACA0" = { }  # 4 instructions, built at 0x8262A7D4 (+3 more)
+"0x8294ACB0" = { }  # 4 instructions, built at 0x82964B78 (+2 more)
+"0x8294ACC0" = { }  # 4 instructions, built at 0x82960B90
+"0x8294ACD0" = { }  # 4 instructions, built at 0x82966698
+"0x8294ACE0" = { }  # 4 instructions, built at 0x829603BC
+"0x8294ACF0" = { }  # 4 instructions, built at 0x82960D3C
+"0x8294AD00" = { }  # 4 instructions, built at 0x82960E3C
+"0x8294AD10" = { }  # 4 instructions, built at 0x82960F28
+"0x8294AD20" = { }  # 4 instructions, built at 0x82960FE4
+"0x8294AD30" = { }  # 4 instructions, built at 0x829608A0
+"0x8294AD40" = { }  # 4 instructions, built at 0x829610A0
+"0x8294AD50" = { }  # 4 instructions, built at 0x8296056C
+"0x8294AD60" = { }  # 4 instructions, built at 0x8295468C
+"0x8294AD70" = { }  # 4 instructions, built at 0x829609A4
+"0x8294AD80" = { }  # 4 instructions, built at 0x829555DC (+1 more)
+"0x8294AD90" = { }  # 4 instructions, built at 0x82964C28 (+2 more)
+"0x8294ADA0" = { }  # 4 instructions, built at 0x82960BE8
+"0x8294ADB0" = { }  # 4 instructions, built at 0x829666C0
+"0x8294ADC0" = { }  # 4 instructions, built at 0x82960414
+"0x8294ADD0" = { }  # 4 instructions, built at 0x82960DAC
+"0x8294ADE0" = { }  # 4 instructions, built at 0x82960E6C
+"0x8294ADF0" = { }  # 4 instructions, built at 0x82960F58
+"0x8294AE00" = { }  # 4 instructions, built at 0x82961014
+"0x8294AE10" = { }  # 4 instructions, built at 0x8296061C
+"0x8294AE20" = { }  # 4 instructions, built at 0x829605C4
+"0x8294AE30" = { }  # 4 instructions, built at 0x8262BE04 (+1 more)
+"0x8294AE40" = { }  # 4 instructions, built at 0x82964CAC
+"0x8294AE50" = { }  # 4 instructions, built at 0x829609FC
+"0x8294AE60" = { }  # 4 instructions, built at 0x829655D8 (+1 more)
+"0x8294AE70" = { }  # 4 instructions, built at 0x82960CE4
+"0x8294AE80" = { }  # 4 instructions, built at 0x82960464
+"0x8294AE90" = { }  # 4 instructions, built at 0x82960DDC
+"0x8294AEA0" = { }  # 4 instructions, built at 0x82960E9C (+1 more)
+
+# Runtime auto-resolve candidate, accepted from an observed indirect-call failure.
+# Observed entry +0x10 inside the 24-byte gap 0x83D37E68-0x83D37E80; only this address is declared.
+"0x83D37E78" = { }
+
+# Runtime auto-resolve candidate, accepted from an observed indirect-call failure.
+# Observed entry +0x10 inside the 48-byte gap 0x82DA59C8-0x82DA59F8; only this address is declared.
+"0x82DA59D8" = { }
+
+# Runtime auto-resolve candidate, accepted from an observed indirect-call failure.
+# Exact start the 16-byte gap 0x829BDE90-0x829BDEA0; only this address is declared.
+"0x829BDE90" = { }
+
+# Code pointers into unclaimed gaps, stored in data (vtables, callback tables) or built in code (lis/addi:
+# callbacks passed at run time), accepted by tools/pointer_fixpoint.py pass 1: the scratch listing fits
+# in the gap (or continues only into a registered function it branches to: "then the registered tail"),
+# ends in a terminator and reads no register that is undefined at a function entry. The comment says
+# where the pointer is stored ("pointer at") or built ("built at", inside the code range).
+"0x82346B14" = { }  # 4 instructions, pointer at 0x82240988
+"0x829ACBF0" = { }  # 8 instructions, pointer at 0x8207A364
+"0x829ACC10" = { }  # 3 instructions, pointer at 0x8207A3B8 (+1 more)
+"0x829ACC50" = { }  # 8 instructions, pointer at 0x8207A3C4
+"0x829ACC70" = { }  # 5 instructions, pointer at 0x8207A3B0 (+1 more)
+"0x829ACCA8" = { }  # 8 instructions, pointer at 0x8207A3F4
+"0x829ACCC8" = { }  # 3 instructions, pointer at 0x8207A418 (+1 more)
+"0x829ACD08" = { }  # 8 instructions, pointer at 0x8207A424
+"0x829ACD28" = { }  # 5 instructions, pointer at 0x8207A410 (+1 more)
+"0x829ACD60" = { }  # 8 instructions, pointer at 0x8207A454
+"0x829ACD80" = { }  # 3 instructions, pointer at 0x8207A478 (+14 more)
+"0x829ACDC0" = { }  # 8 instructions, pointer at 0x8207A484
+"0x829ACDE0" = { }  # 8 instructions, pointer at 0x8207A4B0
+"0x829ACE00" = { }  # 8 instructions, pointer at 0x8207A4B4
+"0x829ACE20" = { }  # 8 instructions, pointer at 0x8207A4E0
+"0x829ACE40" = { }  # 8 instructions, pointer at 0x8207A4E4
+"0x829ACE60" = { }  # 5 instructions, pointer at 0x8207A470 (+4 more)
+"0x829ACE98" = { }  # 8 instructions, pointer at 0x8207A514
+"0x829ACEB8" = { }  # 6 instructions, pointer at 0x8207A530
+"0x829ACF10" = { }  # 8 instructions, pointer at 0x8207A544
+"0x829ACF30" = { }  # 8 instructions, pointer at 0x8207A570
+"0x829ACF50" = { }  # 8 instructions, pointer at 0x8207A574
+"0x829ACF70" = { }  # 8 instructions, pointer at 0x8207A5A0
+"0x829ACF90" = { }  # 8 instructions, pointer at 0x8207A5A4
+"0x829B0BF0" = { }  # 8 instructions, pointer at 0x8207A960
+"0x829B0C88" = { }  # 8 instructions, pointer at 0x8207A990
+"0x829B0CA8" = { }  # 6 instructions, pointer at 0x8207A94C (+1 more)
+"0x829B3910" = { }  # 8 instructions, pointer at 0x8207ACDC
+"0x829B3930" = { }  # 3 instructions, pointer at 0x8207ACF4
+"0x829B3A68" = { }  # 8 instructions, pointer at 0x8207AD24
+"0x829B3A88" = { }  # 3 instructions, pointer at 0x8207AD3C
+"0x829B7B08" = { }  # 8 instructions, pointer at 0x8207AED8
+"0x829B7B28" = { }  # 3 instructions, pointer at 0x8207AEF0
+"0x829C5750" = { }  # 15 instructions, pointer at 0x8200ED64 (+3 more)
+"0x829DFFA8" = { }  # 18 instructions, pointer at 0x8207C67C
+"0x82A029B0" = { }  # 4 instructions, pointer at 0x82007FAC (+2 more)
+"0x82A14F00" = { }  # 18 instructions, pointer at 0x8207FAF4
+"0x82A18D00" = { }  # 4 instructions, pointer at 0x8207FB24
+"0x82A2B488" = { }  # 5 instructions, pointer at 0x82083450
+"0x82A2B520" = { }  # 3 instructions, pointer at 0x82082344 (+1 more)
+"0x82A2B560" = { }  # 6 instructions, pointer at 0x82082CC4
+"0x82A2BBF0" = { }  # 4 instructions, built at 0x82A3E370
+"0x82A2BC00" = { }  # 4 instructions, built at 0x82960514 (+1 more)
+"0x82A2BC10" = { }  # 4 instructions, built at 0x829608FC (+2 more)
+"0x82A3E848" = { }  # 18 instructions, pointer at 0x82082414
+"0x82A512E8" = { }  # 6 instructions, pointer at 0x820843A0
+"0x82A71C50" = { }  # 12 instructions, pointer at 0x82084FB0
+"0x82A71C80" = { }  # 5 instructions, pointer at 0x8208004C (+4 more)
+"0x82A98428" = { }  # 2 instructions, pointer at 0x8208886C (+1 more)
+"0x82A98458" = { }  # 2 instructions, pointer at 0x82088888 (+1 more)
+"0x82A98480" = { }  # 2 instructions, pointer at 0x8208882C (+1 more)
+"0x82A98488" = { }  # 2 instructions, pointer at 0x82088830 (+1 more)
+"0x82A98498" = { }  # 2 instructions, pointer at 0x82088844 (+1 more)
+"0x82A984E8" = { }  # 2 instructions, pointer at 0x8208885C (+1 more)
+"0x82A99568" = { }  # 1 instructions, pointer at 0x8208744C
+"0x82AC79B8" = { }  # 2 instructions, built at 0x82AD2374
+"0x82AC8040" = { }  # 1 instructions, pointer at 0x8208A6E4
+"0x82ADE780" = { }  # 4 instructions, pointer at 0x8208AB1C
+"0x82AE3650" = { }  # 2 instructions, pointer at 0x8208D214
+"0x82AE3668" = { }  # 4 instructions, built at 0x8274F318 (+4 more)
+"0x82AEAD98" = { }  # 12 instructions, pointer at 0x8208CA4C
+"0x82AEADC8" = { }  # 9 instructions, pointer at 0x82018934 (+2 more)
+"0x82AF2DD0" = { }  # 18 instructions, pointer at 0x8208C928
+"0x82B21B20" = { }  # 2 instructions, pointer at 0x820912D8
+"0x82B2C970" = { }  # 15 instructions, pointer at 0x82091570
+"0x82B47EF8" = { }  # 4 instructions, pointer at 0x820933AC (+94 more)
+"0x82B48410" = { }  # 6 instructions, pointer at 0x82093400 (+2 more)
+"0x82BA6B60" = { }  # 3 instructions, pointer at 0x8209720C
+"0x82BB5758" = { }  # 2 instructions, pointer at 0x820985D4
+"0x82BCDE48" = { }  # 2 instructions, built at 0x82BCF724
+"0x82BD5E30" = { }  # 4 instructions, built at 0x82BF4C34
+"0x82BD5E40" = { }  # 4 instructions, built at 0x82BF4CB4
+"0x82BD5E50" = { }  # 4 instructions, built at 0x82BE9DC8 (+2 more)
+"0x82BD5E60" = { }  # 4 instructions, built at 0x82BF4C04
+"0x82BD5E70" = { }  # 4 instructions, built at 0x82BF4C08
+"0x82BF6B90" = { }  # 6 instructions, pointer at 0x8209C894
+"0x82C39478" = { }  # 4 instructions, built at 0x829604BC (+1 more)
+"0x82C39488" = { }  # 4 instructions, built at 0x82C44278 (+1 more)
+"0x82C39498" = { }  # 4 instructions, built at 0x82C441EC
+"0x82C394A8" = { }  # 4 instructions, built at 0x82C44174
+"0x82C394B8" = { }  # 4 instructions, built at 0x82C44198
+"0x82C394C8" = { }  # 4 instructions, built at 0x82C441B4
+"0x82C394D8" = { }  # 4 instructions, built at 0x82C442E8 (+1 more)
+"0x82C394E8" = { }  # 4 instructions, built at 0x82C5E814
+"0x82C394F8" = { }  # 4 instructions, built at 0x82C44208 (+1 more)
+"0x82C39508" = { }  # 4 instructions, built at 0x82C441D0
+"0x82C564B0" = { }  # 60 instructions, pointer at 0x820A38B4
+"0x82C5EAA0" = { }  # 2 instructions, pointer at 0x820A2440 (+2 more)
+"0x82C5EAD0" = { }  # 2 instructions, pointer at 0x8204457C (+7 more)
+"0x82D15210" = { }  # 1 instructions, pointer at 0x8209FEC8 (+1 more)
+"0x82D3BF80" = { }  # 5 instructions, pointer at 0x820AD498
+"0x82DA59C8" = { }  # 4 instructions, built at 0x82678FBC (+6 more)
+"0x82DA59E8" = { }  # 4 instructions, built at 0x82678D48 (+4 more)
+"0x82E05AE8" = { }  # 6 instructions, pointer at 0x820BFFC8
+"0x82E05B60" = { }  # 1 instructions, pointer at 0x820BEDA0
+"0x82E06568" = { }  # 3 instructions, pointer at 0x820C00B4
+"0x82E06618" = { }  # 6 instructions, pointer at 0x820C00F0
+"0x82E0D658" = { }  # 4 instructions, built at 0x82480284 (+5 more)
+"0x82E0D668" = { }  # 2 instructions, pointer at 0x820BC108
+"0x82E664D8" = { }  # 4 instructions, built at 0x82E740B0 (+4 more)
+"0x82E83CC0" = { }  # 4 instructions, pointer at 0x820C2340
+"0x82EA7FD0" = { }  # 17 instructions, pointer at 0x8202722C (+16 more)
+"0x82F262F0" = { }  # 18 instructions, pointer at 0x820CE7A8
+"0x82F2ACD0" = { }  # 3 instructions, pointer at 0x820CE7B8
+"0x82FBB318" = { }  # 8 in the gap, then the registered tail sub_82FBB338, pointer at 0x820D6F94 (+1 more)
+"0x82FBBB28" = { }  # 6 instructions, pointer at 0x82019134 (+1 more)
+"0x82FBBBA8" = { }  # 6 instructions, pointer at 0x8201913C (+1 more)
+"0x83065190" = { }  # 18 instructions, pointer at 0x820E01C4
+"0x830ED110" = { }  # 4 instructions, built at 0x82BF4BDC (+1 more)
+"0x8316F098" = { }  # 1 instructions, pointer at 0x820D7EB4 (+2 more)
+"0x8318FD38" = { }  # 9 instructions, pointer at 0x820F1254
+"0x831CB4F0" = { }  # 2 instructions, built at 0x831E3FD0
+"0x831CB500" = { }  # 2 instructions, built at 0x831E3FFC
+"0x831EC500" = { }  # 4 instructions, pointer at 0x820F8798
+"0x831EC510" = { }  # 16 instructions, pointer at 0x820F879C (+1 more)
+"0x83234510" = { }  # 18 instructions, pointer at 0x820FD008
+"0x8327C698" = { }  # 4 instructions, pointer at 0x820FEFD4
+"0x832860E0" = { }  # 4 instructions, pointer at 0x820FF33C (+1 more)
+"0x8328B730" = { }  # 16 instructions, pointer at 0x82055B98
+"0x832A3D40" = { }  # 4 instructions, built at 0x827D8F84 (+1 more)
+"0x832FD098" = { }  # 18 instructions, pointer at 0x821041F4
+"0x833349F0" = { }  # 11 instructions, built at 0x8334ED2C (+1 more)
+"0x83444240" = { }  # 5 instructions, pointer at 0x8211B0C4
+"0x8345B4A0" = { }  # 5 instructions, pointer at 0x8211CA14 (+8 more)
+"0x8345BA50" = { }  # 2 instructions, pointer at 0x8211DD38 (+1 more)
+"0x8345E430" = { }  # 8 instructions, pointer at 0x8211D1D0
+"0x83460820" = { }  # 2 instructions, pointer at 0x8211D2E4
+"0x83460828" = { }  # 2 instructions, pointer at 0x8211D258
+"0x83460938" = { }  # 2 instructions, pointer at 0x8211D29C
+"0x83473168" = { }  # 12 instructions, pointer at 0x8201D8EC
+"0x8348D470" = { }  # 4 instructions, pointer at 0x8211CB3C
+"0x834A4F58" = { }  # 16 instructions, pointer at 0x8211EE0C
+"0x834A9A70" = { }  # 1 instructions, pointer at 0x82121158
+"0x834AA4D0" = { }  # 2 instructions, pointer at 0x821223E8
+"0x834AA4D8" = { }  # 2 instructions, pointer at 0x821223F4
+"0x834AA4E0" = { }  # 2 instructions, pointer at 0x82122418
+"0x834AA538" = { }  # 12 instructions, pointer at 0x8212242C
+"0x83543330" = { }  # 8 instructions, pointer at 0x82127CC8
+"0x83543350" = { }  # 2 instructions, pointer at 0x821286FC
+"0x83554248" = { }  # 8 instructions, pointer at 0x82129808
+"0x83554268" = { }  # 8 instructions, pointer at 0x82129988
+"0x835C3A30" = { }  # 8 instructions, pointer at 0x82132128
+"0x835C3A50" = { }  # 8 instructions, pointer at 0x821322A8
+"0x835D5060" = { }  # 8 instructions, pointer at 0x821337E0
+"0x835D5080" = { }  # 8 instructions, pointer at 0x82133828
+"0x835D50A0" = { }  # 8 instructions, pointer at 0x821338A0
+"0x8367B4C8" = { }  # 3 instructions, built at 0x8367D070 (+1 more)
+"0x8367B4F0" = { }  # 5 instructions, built at 0x8367D53C
+"0x836A1C48" = { }  # 2 instructions, pointer at 0x8217C500
+"0x836A4120" = { }  # 2 instructions, pointer at 0x8217C5B4 (+4 more)
+"0x836A4128" = { }  # 2 instructions, pointer at 0x8217C5B0 (+4 more)
+"0x836A4130" = { }  # 2 instructions, pointer at 0x8217C5AC (+4 more)
+"0x836A4138" = { }  # 2 instructions, pointer at 0x8217C5EC
+"0x836A4148" = { }  # 22 instructions, pointer at 0x8217C60C (+2 more)
+"0x836A41A0" = { }  # 2 instructions, pointer at 0x8217C5A0 (+2 more)
+"0x836A9300" = { }  # 2 instructions, pointer at 0x8217C5C8 (+4 more)
+"0x836A9308" = { }  # 2 instructions, pointer at 0x8217C95C
+"0x836A9318" = { }  # 2 instructions, pointer at 0x8217C948 (+1 more)
+"0x836A9320" = { }  # 2 instructions, pointer at 0x8217C5E8 (+4 more)
+"0x836A9328" = { }  # 2 instructions, pointer at 0x8217C5BC (+4 more)
+"0x836A9330" = { }  # 61 instructions, pointer at 0x8217C97C
+"0x836AA6D8" = { }  # 2 instructions, pointer at 0x8217C5C4 (+4 more)
+"0x836AA6E0" = { }  # 2 instructions, pointer at 0x8217CA24
+"0x836AA6F0" = { }  # 2 instructions, pointer at 0x8217C5A8 (+4 more)
+"0x836AA6F8" = { }  # 2 instructions, pointer at 0x8217C940 (+1 more)
+"0x836AA700" = { }  # 2 instructions, pointer at 0x8217C5C0 (+4 more)
+"0x836AA708" = { }  # 2 instructions, pointer at 0x8217C910 (+1 more)
+"0x836AA710" = { }  # 2 instructions, pointer at 0x8217C5B8 (+4 more)
+"0x836AA718" = { }  # 63 instructions, pointer at 0x8217CA44
+"0x836AAE70" = { }  # 6 instructions, pointer at 0x8217CB04
+"0x836ABB78" = { }  # 2 instructions, pointer at 0x8217CA98
+"0x836AC8D0" = { }  # 2 instructions, pointer at 0x8217CB5C
+"0x836AF848" = { }  # 11 in the gap, then the registered tail sub_836AF874, pointer at 0x8217CD28
+"0x836BD7C0" = { }  # 2 instructions, pointer at 0x82180B28 (+1 more)
+"0x836BD7D0" = { }  # 2 instructions, pointer at 0x82180B9C
+"0x836BEFA8" = { }  # 2 instructions, pointer at 0x82180C3C
+"0x836BEFB8" = { }  # 2 instructions, pointer at 0x82180C40 (+1 more)
+"0x836BEFC8" = { }  # 2 instructions, pointer at 0x82180B44 (+2 more)
+"0x83719AB0" = { }  # 5 instructions, pointer at 0x821A1660 (+1 more)
+"0x83719AD8" = { }  # 5 instructions, pointer at 0x821A1670 (+1 more)
+"0x83772158" = { }  # 8 instructions, pointer at 0x83E337E4 (+3 more)
+"0x83772178" = { }  # 10 instructions, pointer at 0x83E337E8 (+3 more)
+"0x837721A0" = { }  # 8 instructions, pointer at 0x83E337EC (+3 more)
+"0x837721C0" = { }  # 8 instructions, pointer at 0x83E337F0 (+3 more)
+"0x837721E0" = { }  # 9 instructions, pointer at 0x83E337F4 (+3 more)
+"0x83772218" = { }  # 5 instructions, pointer at 0x83E337FC (+3 more)
+"0x8378FBB0" = { }  # 10 instructions, pointer at 0x83E338D8
+"0x8378FBD8" = { }  # 8 instructions, pointer at 0x83E338D4
+"0x8378FBF8" = { }  # 9 instructions, pointer at 0x83E338E4
+"0x8378FC78" = { }  # 4 instructions, pointer at 0x83E338FC
+"0x83795830" = { }  # 8 instructions, pointer at 0x821AA1C0 (+15 more)
+"0x83795850" = { }  # 5 in the gap, then the registered tail sub_83795864, pointer at 0x821AA1C4 (+15 more)
+"0x837A80F8" = { }  # 2 instructions, pointer at 0x821AC278 (+3 more)
+"0x837A95A0" = { }  # 3 instructions, pointer at 0x821ADB64
+"0x837AA2F0" = { }  # 4 instructions, built at 0x837AA3CC
+"0x837AA300" = { }  # 4 instructions, built at 0x837AA3D0
+"0x837AA390" = { }  # 2 instructions, pointer at 0x821AE218 (+13 more)
+"0x837B8EA8" = { }  # 6 instructions, pointer at 0x821B1D04
+"0x837B8EC0" = { }  # 6 instructions, pointer at 0x821B1D08
+"0x837B8ED8" = { }  # 1 instructions, pointer at 0x821B1D0C
+"0x837B8FA0" = { }  # 5 instructions, pointer at 0x821B1D7C (+2 more)
+"0x837DC948" = { }  # 4 instructions, pointer at 0x821AE248 (+1 more)
+"0x837DC958" = { }  # 4 instructions, pointer at 0x821AE250 (+1 more)
+"0x837DC968" = { }  # 4 instructions, pointer at 0x821AE24C (+1 more)
+"0x837DC978" = { }  # 4 instructions, pointer at 0x821AE258 (+1 more)
+"0x83804720" = { }  # 11 instructions, pointer at 0x821BF844
+"0x83814028" = { }  # 6 in the gap, then the registered tail sub_83814040, pointer at 0x821C24A8
+"0x838318D8" = { }  # 6 instructions, pointer at 0x821C6518
+"0x838318F0" = { }  # 6 instructions, pointer at 0x821C651C
+"0x83831908" = { }  # 6 instructions, pointer at 0x821C6520
+"0x83831920" = { }  # 6 instructions, pointer at 0x821C6524
+"0x83831938" = { }  # 6 instructions, pointer at 0x821C6528
+"0x83831950" = { }  # 6 instructions, pointer at 0x821C652C
+"0x83831968" = { }  # 6 instructions, pointer at 0x821C6530
+"0x83831980" = { }  # 6 instructions, pointer at 0x821C6534
+"0x83831998" = { }  # 6 instructions, pointer at 0x821C6538
+"0x838319B0" = { }  # 2 instructions, pointer at 0x821C653C
+"0x83831DA8" = { }  # 6 instructions, pointer at 0x821C6770
+"0x83831DC0" = { }  # 6 instructions, pointer at 0x821C6774
+"0x83831DD8" = { }  # 6 instructions, pointer at 0x821C6778
+"0x83831DF0" = { }  # 6 instructions, pointer at 0x821C677C
+"0x83831E08" = { }  # 6 instructions, pointer at 0x821C6780
+"0x83831E20" = { }  # 6 instructions, pointer at 0x821C6784
+"0x83831E38" = { }  # 6 instructions, pointer at 0x821C6788
+"0x83831E50" = { }  # 6 instructions, pointer at 0x821C678C
+"0x83831E68" = { }  # 6 instructions, pointer at 0x821C6790
+"0x83831E80" = { }  # 6 instructions, pointer at 0x821C6794
+"0x83831E98" = { }  # 5 instructions, pointer at 0x821C67F0
+"0x83846D48" = { }  # 8 instructions, pointer at 0x821CC7F0
+"0x83846D68" = { }  # 8 instructions, pointer at 0x821CC7F4
+"0x83846D88" = { }  # 8 instructions, pointer at 0x821CC7F8
+"0x83846DA8" = { }  # 8 instructions, pointer at 0x821CC808
+"0x83846DC8" = { }  # 8 instructions, pointer at 0x821CC80C
+"0x83846DE8" = { }  # 8 instructions, pointer at 0x821CC794
+"0x83846E08" = { }  # 8 instructions, pointer at 0x821CC798
+"0x83846E28" = { }  # 8 instructions, pointer at 0x821CC79C
+"0x83846E48" = { }  # 8 instructions, pointer at 0x821CC7A0
+"0x83846E68" = { }  # 8 instructions, pointer at 0x821CC7B0
+"0x83846E88" = { }  # 8 instructions, pointer at 0x821CC7B4
+"0x83846EA8" = { }  # 8 instructions, pointer at 0x821CC7C0
+"0x83846EC8" = { }  # 8 instructions, pointer at 0x821CC7C4
+"0x83846EE8" = { }  # 8 instructions, pointer at 0x821CC7C8
+"0x83846F08" = { }  # 8 instructions, pointer at 0x821CC7CC
+"0x83846F28" = { }  # 8 instructions, pointer at 0x821CC7DC
+"0x83846F48" = { }  # 8 instructions, pointer at 0x821CC7E0
+"0x83849E00" = { }  # 7 instructions, built at 0x8384B0E0
+"0x8384FE40" = { }  # 3 instructions, pointer at 0x821CDA78
+"0x8385DA98" = { }  # 10 instructions, pointer at 0x821CEC10
+"0x83863408" = { }  # 5 instructions, pointer at 0x821CF9D0
+"0x838728D8" = { }  # 4 instructions, pointer at 0x821CD884 (+1 more)
+"0x8387CFA8" = { }  # 2 instructions, pointer at 0x821D1F04
+"0x8387CFB0" = { }  # 2 instructions, pointer at 0x821D1F08
+"0x8387CFB8" = { }  # 3 instructions, pointer at 0x821D1F0C
+"0x8387DC08" = { }  # 4 instructions, pointer at 0x821D2000
+"0x8387DC18" = { }  # 4 instructions, pointer at 0x821D2004
+"0x8387DC28" = { }  # 4 instructions, pointer at 0x821D2008
+"0x8387E528" = { }  # 4 instructions, pointer at 0x821D2038
+"0x8387E538" = { }  # 4 instructions, pointer at 0x821D203C
+"0x8387E548" = { }  # 4 instructions, pointer at 0x821D2040
+"0x8390BAF0" = { }  # 5 instructions, pointer at 0x821D9380 (+1 more)
+"0x83915688" = { }  # 10 instructions, built at 0x8391587C
+"0x839156E0" = { }  # 6 instructions, built at 0x8391584C
+"0x839156F8" = { }  # 6 instructions, built at 0x83915848
+"0x83915710" = { }  # 6 instructions, built at 0x83915844
+"0x83938278" = { }  # 4 instructions, pointer at 0x821E2F9C (+5 more)
+"0x83938288" = { }  # 5 instructions, pointer at 0x821E2FA0 (+5 more)
+"0x839BC2A8" = { }  # 2 instructions, pointer at 0x8211CC34 (+2 more)
+"0x83AD1350" = { }  # 5 instructions, pointer at 0x82205CB4
+"0x83AD1FD8" = { }  # 2 instructions, pointer at 0x82205E94
+"0x83B69F90" = { }  # 1 instructions, pointer at 0x8220A3D0
+"0x83B79B58" = { }  # 10 instructions, built at 0x83B9C3C8
+"0x83B7B7B8" = { }  # 13 in the gap, then the registered tail sub_83B7B7EC, pointer at 0x82213EEC
+"0x83B8BBA0" = { }  # 4 instructions, built at 0x83B8BC44
+"0x83BB9C18" = { }  # 2 instructions, pointer at 0x82213448
+"0x83BCF4E0" = { }  # 5 in the gap, then the registered tail sub_83BCF4F4, pointer at 0x8221AA14
+"0x83BCF508" = { }  # 8 instructions, pointer at 0x8221A9F4
+"0x83BCF7B8" = { }  # 2 instructions, pointer at 0x8221AA58
+"0x83BE9758" = { }  # 4 instructions, built at 0x83BD0948 (+2 more)
+"0x83C20380" = { }  # 2 instructions, pointer at 0x8221DBC0 (+1 more)
+"0x83C20388" = { }  # 2 instructions, pointer at 0x8221DBC4 (+2 more)
+"0x83D20EA8" = { }  # 2 instructions, built at 0x83D2BE14
+"0x83D20F28" = { }  # 3 instructions, built at 0x83D2BEA0
+"0x83D20F58" = { }  # 2 instructions, pointer at 0x8222C514
+"0x83D20F80" = { }  # 2 instructions, pointer at 0x8222C9CC
+"0x83D24938" = { }  # 3 instructions, pointer at 0x820CCF30 (+9 more)
+"0x83D2E6D0" = { }  # 4 instructions, pointer at 0x8222CD64
+"0x83D37630" = { }  # 2 instructions, built at 0x83D42168
+"0x83D37A60" = { }  # 2 instructions, built at 0x83D4240C
+"0x83D37E68" = { }  # 4 instructions, built at 0x83D3F3C8
+"0x83D39FF0" = { }  # 29 instructions, built at 0x83D3F33C
+"0x83D44640" = { }  # 18 instructions, pointer at 0x8222F33C
+
+# Code pointers into unclaimed gaps, stored in data (vtables, callback tables) or built in code (lis/addi:
+# callbacks passed at run time), accepted by tools/pointer_fixpoint.py pass 1: the scratch listing fits
+# in the gap (or continues only into a registered function it branches to: "then the registered tail"),
+# ends in a terminator and reads no register that is undefined at a function entry. The comment says
+# where the pointer is stored ("pointer at") or built ("built at", inside the code range).
+"0x837AA310" = { }  # 4 instructions, built at 0x837AA404
+"0x837AA320" = { }  # 4 instructions, built at 0x837AA408
+"0x837AA330" = { }  # 4 instructions, built at 0x837AA410
+"0x837AA340" = { }  # 4 instructions, built at 0x837AA418
+"0x837AA350" = { }  # 4 instructions, built at 0x837AA400
+"0x837AA360" = { }  # 4 instructions, built at 0x837AA420
+"0x837AA370" = { }  # 4 instructions, built at 0x837AA430
+"0x837AA380" = { }  # 4 instructions, built at 0x837AA438
+"0x83915660" = { }  # 10 instructions, built at 0x83915894
+"0x839156B0" = { }  # 6 instructions, built at 0x8391589C
+"0x839156C8" = { }  # 6 instructions, built at 0x839158A4

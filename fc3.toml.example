@@ -1,0 +1,157 @@
+# Example settings. Keep log_network set (see INSTALL.md).
+fc3_dk_water_vs_texture = true
+fc3_dump_tower_materials = false
+fc3_graphics_state_trace = false
+fc3_dk_dump_unknown_vs = false
+fc3_histogram_query_guard = true
+input_play_auto_s = 0
+input_play = ""
+input_merge_pads = true
+fc3_cpu_native_raster = true
+fc3_dk_escala_3d = 4
+fc3_dk_fsr1 = true
+fc3_dk_minmax_async_rgba8 = true
+fc3_dk_manual_prefijo = true
+fc3_dk_readback_cpu_profile = false
+fc3_dk_manual_cache = false
+fc3_dk_manual_cache_verify = 0
+fc3_skip_identical_texture_uploads = false
+fc3_trace_texture_reuploads = false
+fc3_biased_texture_experiment = true
+fc3_light_test = 0
+fc3_dk_fetch_misma_posicion = true
+fc3_dk_resueltas_fijas_kb = 1024
+fc3_dk_lecturas_sincronas_minmax = true
+fc3_dk_exp_adjust_rgba8 = true
+nfsmw_dk_envio_parcial = 32
+nfsmw_nativo_resolver_sin_copia = false
+nfsmw_nativo_frontal_perezoso = false
+fc3_dk_blendindices_normalizados = true
+fc3_extra_vertex_semantics = true
+fc3_dk_saltar_ps = ""
+fc3_dk_sin_estencil_ps = "59,153,179,618,746,817,831,1053,1288,1329,1330,1367,1565,1820,1918,1946,2017,2050,2193,2508,2522,2700"
+fc3_dk_estencil_tarjetas = true
+fc3_trace_lighting_checkpoint = false
+fc3_dump_card_upstream = false
+fc3_fix_card_stencil = false
+
+language = "auto"
+
+fc3_msaa = 0
+
+fc3_vsync_relaxed = true
+
+input_xbox_layout = true
+
+input_joycon_sideways = true
+
+readback_resolve = "some"
+input_autopress = ""
+switch_profile_report = false
+fc3_gpu_boost = false
+guest_thread_host_stack_mb = 4
+gamma_render_target_as_unorm16 = false
+log_to_file = false
+log_network = "127.0.0.1:28771"
+update_data_root = "/switch/fc3-nx/update"
+
+switch_profile_stacks = false
+log_level = "error"
+fc3_guest_lock_spin = 256
+fc3_guest_msr_lockfree = true
+fc3_dk_sesgo_pitch = 960
+fc3_dk_copias_sin_barrera = false
+fc3_dk_copiar_alto_usado = true
+fc3_dk_indices_alineados = false
+fc3_dk_stride0 = false
+fc3_dk_fetch_indice_cero = true
+ds1_oclusion_real = false
+nfsmw_dk_perfil_gpu_s = 0
+ds1_perfil_pilas = false
+ds1_auto_captura_s = 0
+ds1_auto_volcados_max = 0
+ds1_auto_volcado_primero_s = 300
+ds1_auto_volcado_traza = false
+
+fc3_dk_fetch_mas_cercano = true
+
+fc3_sesgo_todos_formatos = true
+fc3_volcado_chord = false
+fc3_volcado_raw = false
+fc3_sonda = false
+fc3_volcado_texturas = false
+fc3_traza_solo_profundidad = false
+fc3_fix_halfres_depth = true
+fc3_fix_z540_swap = false
+
+fc3_dk_fusion_mosaicos = true
+cpu_yield_sites = false
+fc3_lock_spin_stats = false
+switch_profile_cores = false
+fc3_dk_medir_espera_cpu = false
+fc3_tex_ruido_diag = false
+
+switch_profile_fps_csv = false
+
+deko3d_compute_queue = true
+fc3_tex_cpu_perfil = false
+fc3_tex_gpu_untile = true
+fc3_tex_gpu_untile_verify = 0
+
+nfsmw_dk_resueltas_mb = 256
+
+fc3_tex_gpu_reuse_base = true
+fc3_tex_gpu_reuse_base_verify = 0
+
+fc3_dk_tex_cache_fetch = 4096
+fc3_dk_tex_fase_separada = true
+fc3_dk_estado_color_firma = true
+fc3_dk_geometria_rapidas = 65536
+fc3_dk_copia_neon = true
+
+fc3_g70_copia_sin_libros = false
+fc3_g70_copia_sin_cielo = false
+fc3_g70_copia_sin_vista = false
+fc3_g70_sin_copia = false
+
+fc3_dk_anillo_partido = 0
+fc3_dk_anillo_verificar = 0
+fc3_dk_anillo_mb = 8
+cpu_yield_backoff_us = 50
+cpu_yield_backoff_after = 64
+
+[input_p1]
+a = ""
+b = ""
+x = ""
+y = ""
+lb = ""
+rb = ""
+lt = ""
+rt = ""
+start = ""
+back = ""
+ls = ""
+rs = ""
+up = ""
+down = ""
+left = ""
+right = ""
+
+[input_p2]
+a = ""
+b = ""
+x = ""
+y = ""
+lb = ""
+rb = ""
+lt = ""
+rt = ""
+start = ""
+back = ""
+ls = ""
+rs = ""
+up = ""
+down = ""
+left = ""
+right = ""

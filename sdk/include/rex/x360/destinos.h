@@ -1,0 +1,181 @@
+// nfsmw - native renderer, part C2: render targets, copies (resolve and clear) and presentation of the
+// game's image.
+//
+// Measured on PC: each Swap presents the destination of the last copy (RB_COPY_DEST_BASE), and during the
+// videos and the title screen there are 2 copies per frame, both with a clear. This part does that without
+// EDRAM: a render target is one Vulkan image per (base, format, pitch), and a resolved texture is another
+// image per destination address, which is where the Swap looks it up through its fetch constant.
+
+#pragma once
+
+#include <functional>
+
+#include <rex/x360/peticion.h>
+
+#include <rex/graphics/registers.h>
+
+#include <array>
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+namespace rex::memory {
+class Memory;
+}
+namespace rex::ui {
+class Presenter;
+}
+namespace rex::x360 {
+
+// Registers a copy needs, taken from the ring sink's register mirror.
+// Not a Xenos bit: set by the title's glue on a depth clear (bit 9) that must write only the stencil (a Direct3D clear
+// with the stencil on and depth writes off). Dead Space (2008) clears its stencil that way between the G-buffer and
+// the material pass, which still tests the G-buffer's depth.
+constexpr uint32_t kCopiaSoloEstencil = 1u << 30;
+
+struct RegistrosCopia {
+  uint32_t rb_surface_info = 0;
+  uint32_t rb_color_info[4] = {};
+  uint32_t rb_depth_info = 0;
+  uint32_t rb_copy_control = 0;
+  uint32_t rb_copy_dest_base = 0;
+  uint32_t rb_copy_dest_pitch = 0;
+  uint32_t rb_copy_dest_info = 0;
+  uint32_t rb_color_clear = 0;
+  uint32_t rb_color_clear_lo = 0;
+  uint32_t rb_depth_clear = 0;
+  uint32_t pa_sc_window_offset = 0;
+  uint32_t pa_sc_window_scissor_tl = 0;
+  uint32_t pa_sc_window_scissor_br = 0;
+  uint32_t pa_su_sc_mode_cntl = 0;
+  uint32_t pa_su_vtx_cntl = 0;
+  // Fetch constant 0 as vertices: the copy rectangle (D3D9 puts it there).
+  uint32_t fetch_vertices[2] = {};
+};
+
+// Fetch constant 0 as a texture at the time of the Swap: VdSwap writes it.
+struct TexturaSwap {
+  uint32_t dword[6] = {};
+};
+
+// Build the Swap's TexturaSwap from a game's register mirror. VdSwap writes the frontbuffer descriptor into
+// fetch constant 0 just before the Swap packet; the renderer reads the frontbuffer's physical address from
+// swap.dword[1] (see RenderDk::Presentar / TexturaResuelta). Every game's ring reader does this on a Swap, so
+// it lives here: pass the result to DestinosNativos::Presentar. An empty TexturaSwap leaves base=0 and the
+// renderer finds no resolved texture (black screen).
+// Runs `escritura` on a background thread of its own (one, created on first use, in order): writing to the SD card takes
+// 10-50 ms per small operation and the ring thread must not wait for it. std::thread is not available on the Switch
+// (std::system_error, Function not implemented): this uses rex::thread. deko3d backend (destinos.cpp).
+void EncolarEscrituraSd(std::function<void()> escritura);
+
+inline TexturaSwap LeerTexturaSwap(const uint32_t* registros) {
+  TexturaSwap t;
+  for (uint32_t i = 0; i < 6; ++i) {
+    t.dword[i] = registros[rex::graphics::XE_GPU_REG_SHADER_CONSTANT_FETCH_00_0 + i];
+  }
+  return t;
+}
+
+class DestinosNativos {
+ public:
+  // The deko3d backend is created by CrearDestinosDeko3d (nfsmw_dk_render.h / each game).
+  virtual ~DestinosNativos() = default;
+
+  // Resolve and/or clear. false if it could not be done (each cause is logged once).
+  virtual bool Copiar(const RegistrosCopia& registros) = 0;
+
+  // Submits pending work and draws the Swap's texture into the presenter's output. false if that Swap has
+  // no resolved texture.
+  virtual bool Presentar(rex::ui::Presenter* presentador, const TexturaSwap& swap, uint32_t ancho,
+                         uint32_t alto) = 0;
+
+  // 256-entry gamma ramp loaded by the game, 10 bits per channel (red, green, blue). Subsequent outputs
+  // apply it the way the Xbox 360 display does. Called from the same thread as Presentar.
+  virtual void RampaGamma(const std::array<std::array<uint16_t, 3>, 256>& rampa) = 0;
+
+  // The game's occlusion queries (ConsultaOclusion in nfsmw_nativo_sistema.cpp). Empezar: whatever is drawn
+  // until Terminar counts for the base structure. Terminar: returns the last complete count measured for
+  // that structure, in host samples and from an earlier frame, or false if there is none yet.
+  virtual void EmpezarOclusion(uint32_t base) = 0;
+  virtual bool TerminarOclusion(uint32_t base, uint64_t& muestras) = 0;
+  // Asynchronous form (Gears of War 2's Direct3D waits for each result): TerminarOclusionAsincrona records the end
+  // of the query EmpezarOclusion started at base and returns its ticket (0: not counted, no draw went into it or no
+  // room); ResultadoOclusion gives that query's own count once the GPU has done it (false: not yet). Tickets never
+  // asked for again are forgotten after a while.
+  virtual uint64_t TerminarOclusionAsincrona(uint32_t base) {
+    (void)base;
+    return 0;
+  }
+  virtual bool ResultadoOclusion(uint64_t ticket, uint64_t& muestras) {
+    (void)ticket;
+    (void)muestras;
+    return false;
+  }
+  // The game waits for a query of the work still being recorded (nothing more comes until it has its count): that
+  // work is submitted now.
+  virtual void EnviarOclusiones() {}
+  // Accumulated: spans counted on the host, spans without room, published queries, published samples and
+  // the maximum of a single query.
+  virtual void EstadisticasOclusion(uint64_t valores[5]) const = 0;
+
+  // Parts C3-C6: records a ring draw with its shaders. false if it could not.
+  virtual bool Dibujar(const PeticionDibujo& peticion) = 0;
+  // Debugging: every texture resolved during the next frame is written to the SD card as a BMP (a backend that can).
+  virtual void PedirVolcado() {}
+  virtual EstadisticasDibujos EstadisticasDeDibujos() const = 0;
+  // Deferred vertex copies finished: before returning the read pointer to the game.
+  virtual void EsperarSubidas() = 0;
+  // Vertex copies queued and not done yet (only to measure the fences).
+  virtual size_t CopiasPendientes() const { return 0; }
+
+  // Depth copies to a resolved texture: they force keeping the depth tile.
+  virtual uint64_t CopiasProfundidad() const = 0;
+  // Depth clears: color ones are already in Estadisticas.
+  virtual uint64_t BorradosProfundidad() const = 0;
+  virtual void Estadisticas(uint64_t& copias, uint64_t& borrados, uint64_t& presentados,
+                            uint64_t& rechazos) const = 0;
+  // GPU nanoseconds of the measured submissions, accumulated (0 without timestamps).
+  virtual void TiempoGpu(uint64_t& nanosegundos, uint64_t& trabajos) const = 0;
+  // End timestamp of the last measured submission, in nanoseconds per timestampPeriod (0 without
+  // timestamps). Used to measure the real timestamp scale: on the console NVK declares 1 ns per unit and
+  // it is ~1.628 ns.
+  virtual uint64_t MarcaGpuFinalNs() const = 0;
+  // Submissions measured with precise intermediate timestamps (BOTTOM_OF_PIPE), accumulated.
+  virtual uint64_t TrabajosMarcasPrecisas() const = 0;
+  // Ring thread waits for the GPU (vkWaitForFences in Completar), accumulated.
+  virtual void EsperasGpu(uint64_t& veces, uint64_t& nanosegundos) const = 0;
+  // Actual duration of each GPU submission (wall clock, from submit to fence), to compare with the sum of
+  // the timestamps.
+  virtual void DuracionTrabajosGpu(uint64_t& veces, uint64_t& nanosegundos) const = 0;
+  // Cost of starting each command buffer (Grabar with no recording active) and of writing the read-backs
+  // to guest memory, accumulated: {recordings, ns in Grabar, ns resetting pools, read-backs written,
+  // texels written, ns writing them}.
+  virtual void CosteGrabar(uint64_t coste[6]) const = 0;
+  // GPU nanoseconds accumulated per category (kGpuOtros..., nfsmw_nativo_dibujos.h).
+  virtual void TiempoGpuPorCategoria(
+      std::array<uint64_t, kGpuCategorias>& nanosegundos) const = 0;
+  // Shaded fragments, vertex invocations and clipped primitives, accumulated per pass category (only
+  // with nfsmw_nativo_estadisticas_pipeline).
+  virtual void EstadisticasPipeline(std::array<uint64_t, kGpuCategorias>& fragmentos,
+                                    std::array<uint64_t, kGpuCategorias>& vertices,
+                                    std::array<uint64_t, kGpuCategorias>& primitivas) const = 0;
+  // Fragments and draws per pixel shader number (0 = no PS), accumulated over the diagnostic frames, and
+  // how many of those frames there have been.
+  // Image copies and megapixels per size bucket (<=64x64, <=320x320, <=1024x1024, larger), accumulated.
+  virtual void CopiasPorTamano(std::array<uint64_t, 4>& copias,
+                               std::array<uint64_t, 4>& pixeles) const = 0;
+  virtual void EstadisticasPorShader(std::vector<uint64_t>& fragmentos,
+                                     std::vector<uint64_t>& dibujos,
+                                     uint64_t& fotogramas) const = 0;
+  // Swaps by interval since the previous one (kCubetasSwap buckets) and submissions whose first timestamp
+  // came before the previous submission's last one (the GPU chains them without a gap), accumulated.
+  virtual void IntervalosEntreSwaps(std::array<uint64_t, kCubetasSwap>& cubetas, uint64_t& solapes,
+                                    double& peor_ms) const = 0;
+  // Breakdown of Presentar's time, accumulated in nanoseconds and counts:
+  // {waits for the previous output, ns; work submissions, ns in the queue lock, ns in vkQueueSubmit;
+  //  output submissions, ns in the lock, ns in vkQueueSubmit; RefreshGuestOutput, ns before the callback,
+  //  ns inside it, ns after}.
+  virtual void CostePresentar(uint64_t coste[12]) const = 0;
+};
+
+}  // namespace rex::x360
